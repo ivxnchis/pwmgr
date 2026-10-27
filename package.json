@@ -1,0 +1,10 @@
+{
+  "name": "pwmgr",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline password manager browser extension",
+  "scripts": {
+    "test": "node --test"
+  }
+}

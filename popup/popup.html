@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PwMgr</title>
+  <link rel="stylesheet" href="../ui/common.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="row">
+    <img src="../icons/icon32.png" width="20" height="20" alt="">
+    <strong class="grow">PwMgr</strong>
+    <button id="manage" class="small" title="Manage passwords, import, settings">Manage</button>
+    <button id="lock" class="small hidden" title="Lock the vault">Lock</button>
+  </header>
+
+  <section id="setup" class="hidden">
+    <h2>Create your vault</h2>
+    <p class="muted">Choose a master password. It encrypts everything on this computer and cannot be recovered if forgotten.</p>
+    <form id="setup-form">
+      <label for="setup-pw">Master password</label>
+      <input id="setup-pw" type="password" autocomplete="new-password" minlength="8" required>
+      <label for="setup-pw2">Confirm</label>
+      <input id="setup-pw2" type="password" autocomplete="new-password" minlength="8" required>
+      <p class="error" id="setup-error"></p>
+      <button class="primary" type="submit">Create vault</button>
+    </form>
+  </section>
+
+  <section id="locked" class="hidden">
+    <form id="unlock-form">
+      <label for="unlock-pw">Master password</label>
+      <input id="unlock-pw" type="password" autocomplete="current-password" required autofocus>
+      <p class="error" id="unlock-error"></p>
+      <button class="primary" type="submit" id="unlock-btn">Unlock</button>
+    </form>
+  </section>
+
+  <section id="unlocked" class="hidden">
+    <input id="search" type="search" placeholder="Search all passwords…">
+    <h3 id="list-title" class="muted">This site</h3>
+    <ul id="list"></ul>
+    <p id="empty" class="muted hidden">No saved logins for this site.</p>
+    <button id="add-site" class="small">+ Add login for this site</button>
+  </section>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

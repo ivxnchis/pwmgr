@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PwMgr — Manage</title>
+  <link rel="stylesheet" href="../ui/common.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <header>
+    <div class="wrap row">
+      <img src="../icons/icon48.png" width="28" height="28" alt="">
+      <h1 class="grow">PwMgr</h1>
+      <button id="lock" class="small hidden">Lock</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section id="gate" class="card hidden">
+      <h2 id="gate-title">Unlock</h2>
+      <p id="gate-text" class="muted"></p>
+      <form id="gate-form">
+        <label for="gate-pw">Master password</label>
+        <input id="gate-pw" type="password" required>
+        <div id="gate-confirm-wrap" class="hidden">
+          <label for="gate-pw2">Confirm master password</label>
+          <input id="gate-pw2" type="password">
+        </div>
+        <p id="gate-error" class="error"></p>
+        <button class="primary" type="submit" id="gate-btn">Unlock</button>
+      </form>
+    </section>
+
+    <div id="app" class="hidden">
+      <nav class="tabs" role="tablist">
+        <button data-tab="passwords" class="active">Passwords</button>
+        <button data-tab="import">Import / Export</button>
+        <button data-tab="blocked">No-autofill fields</button>
+        <button data-tab="settings">Settings</button>
+      </nav>
+
+      <section id="tab-passwords" class="card">
+        <div class="row">
+          <input id="filter" class="grow" type="search" placeholder="Search by site or username…">
+          <button id="add" class="primary">Add</button>
+        </div>
+        <p id="count" class="muted"></p>
+        <div id="entries"></div>
+      </section>
+
+      <section id="tab-import" class="card hidden">
+        <h2>Import from Chrome or Edge</h2>
+        <ol class="steps">
+          <li><strong>Chrome:</strong> open <code>chrome://password-manager/settings</code> → <em>Export passwords</em> → <em>Download file</em>.</li>
+          <li><strong>Edge:</strong> open <code>edge://wallet/passwords</code> (or <code>edge://settings/passwords</code>) → <em>⋯</em> / Settings → <em>Export passwords</em>.</li>
+          <li>Pick the downloaded <code>.csv</code> below, then <strong>delete that CSV</strong> — it contains your passwords in plain text.</li>
+        </ol>
+        <input id="import-file" type="file" accept=".csv,text/csv">
+        <p id="import-preview" class="muted"></p>
+        <button id="import-btn" class="primary" disabled>Import</button>
+        <p id="import-result"></p>
+
+        <h2 class="spaced">Export</h2>
+        <p class="muted">Downloads a Chrome-compatible CSV (unencrypted). Handy as a backup or to move back to Chrome/Edge.</p>
+        <button id="export-btn">Export CSV</button>
+      </section>
+
+      <section id="tab-blocked" class="card hidden">
+        <h2>Fields where autofill is off</h2>
+        <p class="muted">Add one by right-clicking a field on any page → <em>PwMgr → Turn autofill off / on for this field</em>. The extension also clears values Chrome's own password manager puts in those fields.</p>
+        <ul id="blocked-fields" class="plain"></ul>
+        <h2 class="spaced">Sites where autofill is off</h2>
+        <ul id="blocked-sites" class="plain"></ul>
+        <h2 class="spaced">Sites never offered "Save password"</h2>
+        <ul id="never-save" class="plain"></ul>
+      </section>
+
+      <section id="tab-settings" class="card hidden">
+        <h2>Autofill</h2>
+        <label class="check"><input type="checkbox" id="s-autofillOnLoad"> <span>Fill saved logins automatically when a page loads</span></label>
+        <label class="check"><input type="checkbox" id="s-loginFormsOnly"> <span>Only fill automatically on sign-in forms (skip big edit forms such as profile or player details; the dropdown is still available)</span></label>
+        <label class="check"><input type="checkbox" id="s-offerToSave"> <span>Offer to save new and changed passwords</span></label>
+        <label for="s-autoLockMinutes">Lock automatically after this many minutes without use (0 = when the browser closes)</label>
+        <input id="s-autoLockMinutes" type="number" min="0" max="1440" class="short">
+        <p id="settings-saved" class="success"></p>
+
+        <h2 class="spaced">Change master password</h2>
+        <form id="change-form">
+          <label for="cp-current">Current</label>
+          <input id="cp-current" type="password" required>
+          <label for="cp-next">New (8+ characters)</label>
+          <input id="cp-next" type="password" minlength="8" required>
+          <label for="cp-next2">Confirm new</label>
+          <input id="cp-next2" type="password" minlength="8" required>
+          <p id="cp-msg" class="error"></p>
+          <button type="submit">Change password</button>
+        </form>
+
+        <h2 class="spaced">Danger zone</h2>
+        <button id="delete-vault" class="danger">Delete vault and all saved passwords</button>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="editor">
+    <form id="editor-form" method="dialog">
+      <h2 id="editor-title">Add login</h2>
+      <label for="e-url">Website</label>
+      <input id="e-url" required placeholder="https://example.com">
+      <label for="e-name">Name (optional)</label>
+      <input id="e-name">
+      <label for="e-username">Username</label>
+      <input id="e-username" autocomplete="off">
+      <label for="e-password">Password</label>
+      <div class="row">
+        <input id="e-password" class="grow" type="password" required autocomplete="new-password">
+        <button type="button" id="e-reveal" class="small">Show</button>
+        <button type="button" id="e-generate" class="small">Generate</button>
+      </div>
+      <label for="e-note">Note</label>
+      <textarea id="e-note" rows="2"></textarea>
+      <p id="editor-error" class="error"></p>
+      <div class="row end">
+        <button type="button" id="e-cancel">Cancel</button>
+        <button type="submit" class="primary" value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
