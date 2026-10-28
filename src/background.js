@@ -4,10 +4,12 @@
 import * as C from './crypto.js';
 import { findMatches, hostOf, matchScore } from './match.js';
 import { makeEntry, mergeImport } from './vault.js';
+import { normalizeTotp, totpCode } from './totp.js';
 
 const DEFAULT_SETTINGS = {
   autofillOnLoad: true, // fill matching credentials as soon as a login form appears
   loginFormsOnly: true, // only fill on load when the form looks like a sign-in form
+  autofillTotp: true, // fill 2FA codes into verification-code fields
   offerToSave: true,
   autoLockMinutes: 0, // 0 = stay unlocked until the browser closes
 };
@@ -238,7 +240,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 // ---------- messages from content scripts ----------
 
 function summary(e) {
-  return { id: e.id, username: e.username, name: e.name };
+  return { id: e.id, username: e.username, name: e.name, hasTotp: !!e.totp };
 }
 
 const contentHandlers = {
@@ -264,6 +266,14 @@ const contentHandlers = {
     persist();
     touch();
     return { username: entry.username, password: entry.password };
+  },
+
+  async getTotp({ id }, sender) {
+    await requireUnlocked();
+    const entry = entries.find((e) => e.id === id);
+    if (!entry?.totp || !matchScore(entry.url, sender.url)) throw new Error('No matching 2FA key.');
+    touch();
+    return totpCode(entry.totp);
   },
 
   async loginFormSeen({ count }, sender) {
@@ -402,6 +412,17 @@ const pageHandlers = {
     const at = entry.id ? entries.findIndex((e) => e.id === entry.id) : -1;
     if (at >= 0) entries[at] = { ...makeEntry({ ...entries[at], ...entry }), created: entries[at].created };
     else entries.push(makeEntry(entry));
+    await persist();
+    broadcast({ type: 'vaultChanged' });
+    return {};
+  },
+
+  async setTotp({ id, totp }) {
+    await requireUnlocked();
+    const entry = entries.find((e) => e.id === id);
+    if (!entry) throw new Error('That login no longer exists.');
+    entry.totp = normalizeTotp(totp);
+    entry.updated = Date.now();
     await persist();
     broadcast({ type: 'vaultChanged' });
     return {};

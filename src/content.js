@@ -6,6 +6,8 @@
 
   const TEXT_TYPES = new Set(['text', 'email', 'tel']);
   const USER_HINT = /user|e-?mail|login|account|identifier|phone|correo|usuario|cuenta/i;
+  const OTP_HINT = /one.?time|\botp\b|totp|2fa|mfa|two.?factor|verification.?code|verify.?code|security.?code|auth(entication)?.?code|passcode|\btoken\b|c[oó]digo/i;
+  const OTP_EXCLUDE = /cvv|cvc|card|promo|coupon|discount|gift|zip|postal|phone|captcha|referral/i;
   const SUBMIT_HINT = /log ?in|sign ?in|continue|next|submit|enter|entrar|iniciar|acceder|siguiente|ingresar/i;
   const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
 
@@ -136,6 +138,71 @@
       }
     }
     return groups;
+  }
+
+  // ---------- 2FA (TOTP) code fields ----------
+
+  function isOtpInput(el) {
+    if (!(el instanceof HTMLInputElement) || !['text', 'tel', 'number'].includes(el.type) || el.readOnly) return false;
+    if (/\bone-time-code\b/.test(el.autocomplete)) return true;
+    const hay = `${el.name} ${el.id} ${el.getAttribute('aria-label') || ''} ${labelOf(el)}`;
+    if (!OTP_HINT.test(hay) || OTP_EXCLUDE.test(hay)) return false;
+    return !(el.maxLength > 0 && (el.maxLength < 6 || el.maxLength > 10));
+  }
+
+  // Returns [{ otp: [inputs] }]: either one code field or a row of 6–8 one-digit boxes.
+  function findOtpGroups() {
+    const groups = [];
+    const singles = [...document.querySelectorAll('input')].filter(
+      (i) => i.maxLength === 1 && ['text', 'tel', 'password'].includes(i.type) && !i.readOnly && isVisible(i)
+    );
+    const byContainer = new Map();
+    for (const i of singles) {
+      let node = i.parentElement;
+      let found = null;
+      for (let depth = 0; node && depth < 3 && !found; depth++, node = node.parentElement) {
+        if (singles.filter((s) => node.contains(s)).length >= 6) found = node;
+      }
+      if (!found) continue;
+      node = found;
+      if (!byContainer.has(node)) byContainer.set(node, []);
+      byContainer.get(node).push(i);
+    }
+    const inSplit = new Set();
+    for (const digits of byContainer.values()) {
+      if (digits.length < 6 || digits.length > 8) continue;
+      groups.push({ otp: digits });
+      digits.forEach((d) => inSplit.add(d));
+    }
+    for (const el of document.querySelectorAll('input')) {
+      if (!inSplit.has(el) && isOtpInput(el) && isVisible(el)) groups.push({ otp: [el] });
+    }
+    return groups;
+  }
+
+  function otpGroupFor(el) {
+    return findOtpGroups().find((g) => g.otp.includes(el)) || null;
+  }
+
+  async function fillOtp(group, id, { onlyEmpty }) {
+    const fields = group.otp;
+    if (fields.some(isBlocked) || (onlyEmpty && fields.some((f) => f.value))) return false;
+    const res = await send({ type: 'getTotp', id });
+    if (!res.ok) return false;
+    if (fields.length === 1) markFilled(fields[0], res.code);
+    else [...res.code].forEach((digit, i) => fields[i] && markFilled(fields[i], digit));
+    return true;
+  }
+
+  async function autofillTotp() {
+    if (!state.settings.autofillTotp || state.siteBlocked || state.locked) return;
+    const cred = state.credentials.find((c) => c.hasTotp);
+    if (!cred) return;
+    for (const g of findOtpGroups()) {
+      if (handled.has(g.otp[0])) continue;
+      handled.add(g.otp[0]);
+      await fillOtp(g, cred.id, { onlyEmpty: true });
+    }
   }
 
   function groupFor(el) {
@@ -313,12 +380,12 @@
       });
       box.appendChild(unlockItem);
     } else {
-      for (const cred of state.credentials) {
+      for (const cred of group.otp ? state.credentials.filter((c) => c.hasTotp) : state.credentials) {
         const item = document.createElement('div');
         item.className = 'item';
         const u = document.createElement('span');
         u.className = 'u';
-        u.textContent = cred.username || '(no username)';
+        u.textContent = group.otp ? `🔢 2FA code — ${cred.username || cred.name}` : cred.username || '(no username)';
         const s = document.createElement('span');
         s.className = 's';
         s.textContent = cred.name;
@@ -338,7 +405,8 @@
   async function pick(id) {
     const group = menu?.group;
     hideMenu();
-    if (group) await fillGroup(group, id, { onlyEmpty: false });
+    if (group?.otp) await fillOtp(group, id, { onlyEmpty: false });
+    else if (group) await fillGroup(group, id, { onlyEmpty: false });
   }
 
   function setActive(i) {
@@ -353,6 +421,12 @@
       const el = e.target;
       if (!(el instanceof HTMLInputElement) || !state.hasVault) return;
       if (menu?.target === el) return;
+      const otp = otpGroupFor(el);
+      if (otp) {
+        if (!isBlocked(el) && !state.locked && state.credentials.some((c) => c.hasTotp)) showMenu(el, otp);
+        else hideMenu();
+        return;
+      }
       const group = groupFor(el);
       if (!group || isBlocked(el)) return hideMenu();
       if (state.locked ? el === group.pwd : state.credentials.length) showMenu(el, group);
@@ -510,6 +584,7 @@
       send({ type: 'loginFormSeen', count: state.credentials.length });
     }
     await autofillOnLoad();
+    await autofillTotp();
   }
 
   let scanTimer = null;
@@ -529,6 +604,8 @@
       const groups = findGroups();
       const group = groups.find((g) => g.scope.contains(document.activeElement)) || groups[0];
       if (group) fillGroup(group, msg.id, { onlyEmpty: false });
+      const otp = findOtpGroups()[0];
+      if (otp) fillOtp(otp, msg.id, { onlyEmpty: false });
     }
   });
 

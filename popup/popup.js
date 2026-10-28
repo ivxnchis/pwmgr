@@ -1,4 +1,6 @@
 import { call, copy, el } from '../ui/api.js';
+import { decodeQr, prettyCode } from '../ui/qr.js';
+import { parseTotpInput, totpCode } from '../src/totp.js';
 
 const $ = (id) => document.getElementById(id);
 let tab = null;
@@ -12,9 +14,53 @@ function siteUrl() {
   return tab?.url && /^https?:/.test(tab.url) ? tab.url : '';
 }
 
+// Live 2FA codes shown in the list, refreshed every second.
+let tickers = [];
+setInterval(() => tickers.forEach((t) => t()), 1000);
+
+function totpRow(e, flash) {
+  const code = el('span', { class: 'code' });
+  const left = el('span', { class: 'left' });
+  let current = '';
+  const tick = async () => {
+    const r = await totpCode(e.totp);
+    current = r.code;
+    code.textContent = prettyCode(r.code);
+    left.textContent = `${r.remaining}s`;
+  };
+  tick();
+  tickers.push(tick);
+  return el(
+    'div',
+    { class: 'totp', title: '2FA code' },
+    code,
+    left,
+    el('button', { class: 'small', textContent: 'Copy code', onclick: () => copy(current).then(() => flash('Copied')) })
+  );
+}
+
+// Looks for a 2FA QR code on the visible part of the current tab; falls back to the editor.
+async function setUpTotp(e, flash) {
+  try {
+    const shot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+    const text = await decodeQr(await (await fetch(shot)).blob());
+    const accounts = text ? parseTotpInput(text).accounts : [];
+    if (accounts.length === 1) {
+      await call('setTotp', { id: e.id, totp: accounts[0] });
+      flash('2FA linked');
+      return loadSiteMatches();
+    }
+  } catch {
+    // fall through to the editor
+  }
+  chrome.tabs.create({ url: chrome.runtime.getURL(`options/options.html#edit=${encodeURIComponent(e.id)}&totp=1`) });
+  window.close();
+}
+
 function renderList(entries, { showFill }) {
   const list = $('list');
   list.replaceChildren();
+  tickers = [];
   $('empty').classList.toggle('hidden', entries.length > 0);
   for (const e of entries) {
     const status = el('span', { class: 'copied' });
@@ -28,6 +74,7 @@ function renderList(entries, { showFill }) {
         {},
         el('div', { class: 'ellipsis', title: e.username }, el('strong', { textContent: e.username || '(no username)' })),
         el('div', { class: 'muted ellipsis', textContent: e.name || e.url }),
+        e.totp ? totpRow(e, flash) : null,
         el(
           'div',
           { class: 'actions' },
@@ -43,6 +90,14 @@ function renderList(entries, { showFill }) {
             : null,
           el('button', { class: 'small', textContent: 'Copy user', onclick: () => copy(e.username).then(() => flash('Copied')) }),
           el('button', { class: 'small', textContent: 'Copy password', onclick: () => copy(e.password).then(() => flash('Copied')) }),
+          showFill && !e.totp
+            ? el('button', {
+                class: 'small',
+                textContent: 'Add 2FA',
+                title: 'Scan the 2FA QR code shown on this page, or enter the key',
+                onclick: () => setUpTotp(e, flash),
+              })
+            : null,
           status
         )
       )

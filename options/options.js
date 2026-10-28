@@ -1,6 +1,9 @@
 import { call, copy, el, generatePassword } from '../ui/api.js';
 import { parseBrowserExport, toCSV } from '../src/csv.js';
 import { addPasskey, passkeysSupported, unlockWithPasskey } from '../ui/passkey.js';
+import { decodeQr, imageFromClipboard, prettyCode } from '../ui/qr.js';
+import { parseTotpInput, toOtpauth, totpCode } from '../src/totp.js';
+import { hostOf } from '../src/match.js';
 
 const $ = (id) => document.getElementById(id);
 let entries = [];
@@ -76,7 +79,27 @@ async function loadEntries() {
   renderEntries();
 }
 
+// Live 2FA codes, refreshed every second.
+let tickers = [];
+setInterval(() => tickers.forEach((t) => t()), 1000);
+
+function totpRow(totp) {
+  const code = el('span', { class: 'code' });
+  const left = el('span', { class: 'left' });
+  let current = '';
+  const tick = async () => {
+    const r = await totpCode(totp);
+    current = r.code;
+    code.textContent = prettyCode(r.code);
+    left.textContent = `${r.remaining}s`;
+  };
+  tick();
+  tickers.push(tick);
+  return el('div', { class: 'totp' }, code, left, el('button', { class: 'small', textContent: 'Copy code', onclick: () => copy(current) }));
+}
+
 function renderEntries() {
+  tickers = [];
   const q = $('filter').value.trim().toLowerCase();
   const shown = entries
     .filter((e) => !q || `${e.name} ${e.url} ${e.username}`.toLowerCase().includes(q))
@@ -95,7 +118,8 @@ function renderEntries() {
           el('div', { class: 'ellipsis' }, el('strong', { textContent: e.name })),
           el('div', { class: 'muted ellipsis', textContent: e.url }),
           el('div', { class: 'ellipsis', textContent: e.username || '(no username)' }),
-          pw
+          pw,
+          e.totp ? totpRow(e.totp) : null
         ),
         el(
           'div',
@@ -131,8 +155,70 @@ $('filter').addEventListener('input', renderEntries);
 // ---------- editor ----------
 
 let editing = null;
+let editorTotp = null;
+
+function showTotpStatus(text, isError = false) {
+  $('e-totp-status').textContent = text;
+  $('e-totp-status').className = `${isError ? 'error' : 'muted'} small-text`;
+}
+
+async function previewTotp() {
+  if (!editorTotp) return showTotpStatus('Type the setup key the website shows, choose a picture of its QR code, or paste a screenshot here (Ctrl+V).');
+  const { code, remaining } = await totpCode(editorTotp);
+  const who = [editorTotp.issuer, editorTotp.account].filter(Boolean).join(' · ');
+  showTotpStatus(`✔ Current code: ${prettyCode(code)} (changes in ${remaining}s)${who ? ` — ${who}` : ''}`);
+}
+
+// Picks the account from a (possibly multi-account) key/QR that fits the login being edited.
+function applyTotpText(text) {
+  if (!text.trim()) {
+    editorTotp = null;
+    return previewTotp();
+  }
+  try {
+    const { accounts } = parseTotpInput(text);
+    if (!accounts.length) throw new Error('No time-based 2FA accounts found in that code.');
+    const user = $('e-username').value.trim().toLowerCase();
+    editorTotp = accounts.find((a) => user && a.account.toLowerCase() === user) || accounts[0];
+    if (/^otpauth-migration:/i.test(text.trim())) $('e-totp').value = toOtpauth(editorTotp);
+    previewTotp();
+  } catch (err) {
+    editorTotp = null;
+    showTotpStatus(err.message, true);
+  }
+}
+
+async function totpFromImage(blob) {
+  showTotpStatus('Reading QR code…');
+  const text = await decodeQr(blob).catch(() => null);
+  if (!text) return showTotpStatus('No QR code found in that image. Try a sharper or closer picture.', true);
+  $('e-totp').value = text;
+  applyTotpText(text);
+}
+
+const isDefaultTotp = (t) => t.algorithm === 'SHA1' && t.digits === 6 && t.period === 30;
+
+setInterval(() => $('editor').open && editorTotp && previewTotp(), 1000);
+$('e-totp').addEventListener('input', () => applyTotpText($('e-totp').value));
+$('e-totp-scan').addEventListener('click', () => $('e-totp-file').click());
+$('e-totp-file').addEventListener('change', (ev) => ev.target.files[0] && totpFromImage(ev.target.files[0]));
+$('e-totp-clear').addEventListener('click', () => {
+  $('e-totp').value = '';
+  applyTotpText('');
+});
+$('editor').addEventListener('paste', (ev) => {
+  const image = imageFromClipboard(ev);
+  if (image) {
+    ev.preventDefault();
+    totpFromImage(image);
+  }
+});
 
 function openEditor(entry = {}) {
+  editorTotp = entry.totp || null;
+  $('e-totp').value = editorTotp ? (isDefaultTotp(editorTotp) ? editorTotp.secret.replace(/(.{4})(?=.)/g, '$1 ') : toOtpauth(editorTotp)) : '';
+  $('e-totp-file').value = '';
+  previewTotp();
   editing = entry.id || null;
   $('editor-title').textContent = editing ? 'Edit login' : 'Add login';
   $('e-url').value = entry.url || '';
@@ -170,6 +256,7 @@ $('editor-form').addEventListener('submit', async (ev) => {
         username: $('e-username').value,
         password: $('e-password').value,
         note: $('e-note').value,
+        totp: editorTotp,
       },
     });
     $('editor').close();
@@ -217,6 +304,99 @@ $('import-btn').addEventListener('click', async () => {
   }
 });
 
+// ---------- Google Authenticator / QR import ----------
+
+let gaAccounts = [];
+
+function suggestEntry(acc) {
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const issuer = norm(acc.issuer);
+  const user = acc.account.toLowerCase();
+  let best = null;
+  let bestScore = 0;
+  for (const e of entries) {
+    const site = `${norm(e.name)} ${norm(hostOf(e.url))}`;
+    const issuerHit = issuer && site.includes(issuer);
+    const userHit = user && e.username.toLowerCase() === user;
+    // With an issuer it must match the site; the username alone is reused across sites.
+    const score = issuer ? (issuerHit ? 2 + (userHit ? 1 : 0) : 0) : userHit ? 1 : 0;
+    if (score > bestScore) [best, bestScore] = [e, score];
+  }
+  return best;
+}
+
+function renderGa() {
+  const options = entries
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((e) => ({ value: e.id, label: `${e.name} — ${e.username || '(no username)'}${e.totp ? ' (has 2FA)' : ''}` }));
+  $('ga-list').replaceChildren(
+    ...gaAccounts.map((acc, i) => {
+      const select = el('select', { onchange: (ev) => (gaAccounts[i].target = ev.target.value) });
+      select.append(el('option', { value: '', textContent: "— Don't link —" }));
+      for (const o of options) select.append(el('option', { value: o.value, textContent: o.label }));
+      select.value = acc.target || '';
+      return el('li', {}, el('span', { class: 'ellipsis grow', textContent: [acc.issuer, acc.account].filter(Boolean).join(' · ') || 'Unnamed account' }), select);
+    })
+  );
+  $('ga-link').classList.toggle('hidden', !gaAccounts.length);
+}
+
+async function addGaImages(files) {
+  $('ga-result').textContent = '';
+  let found = 0;
+  let failed = 0;
+  let skipped = 0;
+  for (const file of files) {
+    const text = await decodeQr(file).catch(() => null);
+    try {
+      if (!text) throw new Error();
+      const r = parseTotpInput(text);
+      skipped += r.skipped;
+      for (const acc of r.accounts) {
+        if (gaAccounts.some((a) => a.secret === acc.secret)) continue;
+        gaAccounts.push({ ...acc, target: suggestEntry(acc)?.id || '' });
+        found++;
+      }
+    } catch {
+      failed++;
+    }
+  }
+  $('ga-status').textContent =
+    `${gaAccounts.length} account(s) ready.` +
+    (failed ? ` ${failed} image(s) had no readable 2FA QR code.` : '') +
+    (skipped ? ` ${skipped} counter-based (HOTP) account(s) skipped — only time-based codes are supported.` : '') +
+    (found || gaAccounts.length ? ' Check the login each one is linked to.' : '');
+  renderGa();
+}
+
+$('ga-files').addEventListener('change', async (ev) => {
+  await addGaImages([...ev.target.files]);
+  ev.target.value = '';
+});
+
+document.addEventListener('paste', (ev) => {
+  if ($('editor').open || $('tab-import').classList.contains('hidden')) return;
+  const image = imageFromClipboard(ev);
+  if (image) addGaImages([image]);
+});
+
+$('ga-link').addEventListener('click', async () => {
+  const chosen = gaAccounts.filter((a) => a.target);
+  if (!chosen.length) return ($('ga-result').textContent = 'Pick a login for at least one account.');
+  const overwrite = chosen.filter((a) => entries.find((e) => e.id === a.target)?.totp);
+  if (overwrite.length && !confirm(`${overwrite.length} of these logins already have a 2FA key. Replace it?`)) return;
+  for (const { target, issuer, account, secret, algorithm, digits, period } of chosen) {
+    await call('setTotp', { id: target, totp: { issuer, account, secret, algorithm, digits, period } });
+  }
+  gaAccounts = gaAccounts.filter((a) => !a.target);
+  $('ga-result').className = 'success';
+  $('ga-result').textContent = `Linked ${chosen.length} 2FA account(s). Remember to delete the QR screenshots.`;
+  $('ga-status').textContent = '';
+  await loadEntries();
+  renderGa();
+});
+
 $('export-btn').addEventListener('click', async () => {
   if (!confirm('The exported file will contain all your passwords in plain text. Continue?')) return;
   const { entries: all } = await call('listEntries');
@@ -255,7 +435,7 @@ async function renderBlocked() {
 
 // ---------- settings ----------
 
-const SETTING_IDS = ['autofillOnLoad', 'loginFormsOnly', 'offerToSave', 'autoLockMinutes'];
+const SETTING_IDS = ['autofillOnLoad', 'loginFormsOnly', 'autofillTotp', 'offerToSave', 'autoLockMinutes'];
 
 async function loadSettings() {
   const { settings } = await call('getSettings');
@@ -354,10 +534,16 @@ async function start() {
   $('lock').classList.remove('hidden');
   await Promise.all([loadEntries(), loadSettings(), renderPasskeys()]);
 
-  const add = new URLSearchParams(location.hash.slice(1)).get('add');
-  if (add) {
-    history.replaceState(null, '', location.pathname);
-    openEditor({ url: add });
+  const params = new URLSearchParams(location.hash.slice(1));
+  if (location.hash) history.replaceState(null, '', location.pathname);
+  if (params.get('add')) openEditor({ url: params.get('add') });
+  const target = params.get('edit') && entries.find((e) => e.id === params.get('edit'));
+  if (target) {
+    openEditor(target);
+    if (params.get('totp')) {
+      $('e-totp').focus();
+      showTotpStatus("Couldn't find a 2FA QR code on that page. Type the setup key, choose a picture of the QR code, or paste a screenshot (Ctrl+V).");
+    }
   }
 }
 

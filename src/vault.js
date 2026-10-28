@@ -1,6 +1,7 @@
 // Pure helpers for manipulating the decrypted list of entries.
 
 import { hostOf } from './match.js';
+import { normalizeTotp } from './totp.js';
 
 export function makeEntry(fields, now = Date.now()) {
   const url = String(fields.url || '').trim();
@@ -11,6 +12,7 @@ export function makeEntry(fields, now = Date.now()) {
     username: String(fields.username ?? ''),
     password: String(fields.password ?? ''),
     note: String(fields.note ?? ''),
+    totp: normalizeTotp(fields.totp),
     created: fields.created || now,
     updated: now,
     lastUsed: fields.lastUsed || 0,
@@ -37,8 +39,18 @@ export function mergeImport(entries, incoming, now = Date.now()) {
       index.set(identity(entry), out.length);
       out.push(entry);
       added++;
-    } else if (out[at].password !== entry.password || (entry.note && out[at].note !== entry.note)) {
-      out[at] = { ...out[at], password: entry.password, note: entry.note || out[at].note, updated: now };
+    } else if (
+      out[at].password !== entry.password ||
+      (entry.note && out[at].note !== entry.note) ||
+      (entry.totp && entry.totp.secret !== out[at].totp?.secret)
+    ) {
+      out[at] = {
+        ...out[at],
+        password: entry.password,
+        note: entry.note || out[at].note,
+        totp: entry.totp || out[at].totp || null,
+        updated: now,
+      };
       updated++;
     } else {
       unchanged++;

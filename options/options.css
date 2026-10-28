@@ -24,6 +24,11 @@ input.short { width: 120px; }
 dialog { border: 1px solid var(--border); border-radius: 12px; padding: 20px; width: min(480px, calc(100vw - 32px)); background: var(--bg); color: var(--text); }
 dialog::backdrop { background: rgba(0, 0, 0, .4); }
 .row.end { justify-content: flex-end; margin-top: 8px; }
+.small-text { font-size: 12px; margin-top: 4px; }
+.totp { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+.totp .code { font: 600 16px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .04em; }
+.totp .left { color: var(--muted); font-size: 12px; }
+#ga-list select { width: auto; max-width: 55%; }
 @media (max-width: 560px) {
   .entry { grid-template-columns: 1fr; }
   .entry .actions { justify-content: flex-start; }

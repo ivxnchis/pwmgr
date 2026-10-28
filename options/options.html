@@ -65,6 +65,18 @@
         <button id="import-btn" class="primary" disabled>Import</button>
         <p id="import-result"></p>
 
+        <h2 class="spaced">Import 2FA codes from Google Authenticator</h2>
+        <ol class="steps">
+          <li>In Google Authenticator on your phone: <em>☰ / ⋮ → Transfer accounts → Export accounts</em>, select the accounts and tap <em>Next</em>. It shows one or more QR codes.</li>
+          <li>Take a screenshot or photo of each QR code and choose them below, or paste them (Ctrl+V) on this page. Single-account QR codes from a website's 2FA setup work too.</li>
+          <li>Pick which saved login each code belongs to and click <strong>Link</strong>. Delete the screenshots afterwards — they contain your 2FA keys.</li>
+        </ol>
+        <input id="ga-files" type="file" accept="image/*" multiple>
+        <p id="ga-status" class="muted"></p>
+        <ul id="ga-list" class="plain"></ul>
+        <button id="ga-link" class="primary hidden">Link</button>
+        <p id="ga-result"></p>
+
         <h2 class="spaced">Export</h2>
         <p class="muted">Downloads a Chrome-compatible CSV (unencrypted). Handy as a backup or to move back to Chrome/Edge.</p>
         <button id="export-btn">Export CSV</button>
@@ -84,6 +96,7 @@
         <h2>Autofill</h2>
         <label class="check"><input type="checkbox" id="s-autofillOnLoad"> <span>Fill saved logins automatically when a page loads</span></label>
         <label class="check"><input type="checkbox" id="s-loginFormsOnly"> <span>Only fill automatically on sign-in forms (skip big edit forms such as profile or player details; the dropdown is still available)</span></label>
+        <label class="check"><input type="checkbox" id="s-autofillTotp"> <span>Fill 2FA codes automatically into verification-code fields (for logins with an authenticator key)</span></label>
         <label class="check"><input type="checkbox" id="s-offerToSave"> <span>Offer to save new and changed passwords</span></label>
         <label for="s-autoLockMinutes">Lock automatically after this many minutes without use (0 = when the browser closes)</label>
         <input id="s-autoLockMinutes" type="number" min="0" max="1440" class="short">
@@ -133,6 +146,14 @@
       </div>
       <label for="e-note">Note</label>
       <textarea id="e-note" rows="2"></textarea>
+      <label for="e-totp">Authenticator key for 2FA (optional)</label>
+      <div class="row">
+        <input id="e-totp" class="grow" autocomplete="off" spellcheck="false" placeholder="Key (e.g. JBSW Y3DP EHPK 3PXP) or otpauth:// link">
+        <button type="button" id="e-totp-scan" class="small">QR image…</button>
+        <button type="button" id="e-totp-clear" class="small">Remove</button>
+      </div>
+      <input type="file" id="e-totp-file" accept="image/*" hidden>
+      <p id="e-totp-status" class="muted small-text">Type the setup key the website shows, choose a picture of its QR code, or paste a screenshot here (Ctrl+V).</p>
       <p id="editor-error" class="error"></p>
       <div class="row end">
         <button type="button" id="e-cancel">Cancel</button>
@@ -141,6 +162,7 @@
     </form>
   </dialog>
 
+  <script src="../vendor/jsQR.js"></script>
   <script type="module" src="options.js"></script>
 </body>
 </html>

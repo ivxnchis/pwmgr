@@ -12,7 +12,7 @@ test('parses a Chrome export, including quotes, commas and newlines', () => {
     'empty,https://x.com/,carol,,\r\n';
   const { entries, skipped } = parseBrowserExport(csv);
   assert.equal(skipped, 1);
-  assert.deepEqual(entries[0], { name: 'example.com', url: 'https://example.com/login', username: 'alice', password: 'p,a"ss', note: '' });
+  assert.deepEqual(entries[0], { name: 'example.com', url: 'https://example.com/login', username: 'alice', password: 'p,a"ss', note: '', totp: null });
   assert.equal(entries[1].note, 'line1\nline2');
 });
 
@@ -27,7 +27,7 @@ test('rejects files that are not password exports', () => {
 });
 
 test('CSV export round-trips', () => {
-  const rows = [{ name: 'n', url: 'https://a.com', username: 'u"x', password: 'p,\nq', note: '' }];
+  const rows = [{ name: 'n', url: 'https://a.com', username: 'u"x', password: 'p,\nq', note: '', totp: null }];
   assert.deepEqual(parseBrowserExport(toCSV(rows)).entries, rows);
   assert.equal(parseCSV(toCSV(rows)).length, 2);
 });

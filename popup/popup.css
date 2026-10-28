@@ -6,4 +6,7 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin: 
 #list .actions { display: flex; gap: 4px; margin-top: 6px; }
 .wide { width: 100%; padding: 10px; }
 .center { text-align: center; margin: 8px 0 0; }
+.totp { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.totp .code { font: 600 18px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .04em; }
+.totp .left { color: var(--muted); font-size: 12px; min-width: 26px; }
 .copied { color: var(--ok); font-size: 12px; }
