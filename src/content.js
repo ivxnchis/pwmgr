@@ -298,7 +298,20 @@
     menu = { host, root, box, target, group, items: [], active: -1 };
 
     if (state.locked) {
-      box.innerHTML = '<div class="note">🔒 PwMgr is locked.<br>Click the PwMgr icon in the toolbar to unlock and fill.</div>';
+      const unlockItem = document.createElement('div');
+      unlockItem.className = 'item';
+      const u = document.createElement('span');
+      u.className = 'u';
+      u.textContent = '🔒 Unlock PwMgr';
+      const s = document.createElement('span');
+      s.className = 's';
+      s.textContent = 'Fingerprint, passkey or master password';
+      unlockItem.append(u, s);
+      unlockItem.addEventListener('click', () => {
+        hideMenu();
+        send({ type: 'openUnlockWindow' });
+      });
+      box.appendChild(unlockItem);
     } else {
       for (const cred of state.credentials) {
         const item = document.createElement('div');

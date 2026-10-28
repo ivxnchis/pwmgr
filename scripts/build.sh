@@ -8,7 +8,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 key="${1:-$root/pwmgr-key.pem}"
 chrome="${CHROME:-$(command -v google-chrome || command -v chromium || command -v chromium-browser || ls /opt/pw-browsers/chromium-*/chrome-linux64/chrome 2>/dev/null | head -1 || true)}"
-files=(manifest.json src popup options ui icons)
+files=(manifest.json src popup options unlock ui icons)
 
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT

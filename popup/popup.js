@@ -68,10 +68,12 @@ async function search(q) {
 }
 
 async function refresh() {
-  const { hasVault, locked } = await call('status');
+  const { hasVault, locked, passkeys } = await call('status');
   if (!hasVault) return show('setup');
   if (locked) {
     show('locked');
+    $('passkey-unlock').classList.toggle('hidden', !passkeys);
+    $('passkey-or').classList.toggle('hidden', !passkeys);
     $('unlock-pw').focus();
     return;
   }
@@ -104,6 +106,12 @@ $('unlock-form').addEventListener('submit', async (ev) => {
   } finally {
     $('unlock-btn').disabled = false;
   }
+});
+
+// Windows Hello / Touch ID prompts close toolbar popups, so passkey unlock runs in its own window.
+$('passkey-unlock').addEventListener('click', async () => {
+  await call('openUnlockWindow');
+  window.close();
 });
 
 $('lock').addEventListener('click', async () => {

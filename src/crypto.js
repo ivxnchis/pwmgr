@@ -54,3 +54,16 @@ export async function decryptJSON(key, { iv, data }) {
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(iv) }, key, fromB64(data));
   return JSON.parse(dec.decode(plain));
 }
+
+// Turns a WebAuthn PRF output (a secret only the authenticator can reproduce) into a
+// wrapping key for the vault key.
+export async function deriveWrapKey(prfOutput) {
+  const base = await crypto.subtle.importKey('raw', prfOutput, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: enc.encode('pwmgr passkey unlock v1') },
+    base,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}

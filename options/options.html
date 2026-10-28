@@ -20,6 +20,10 @@
     <section id="gate" class="card hidden">
       <h2 id="gate-title">Unlock</h2>
       <p id="gate-text" class="muted"></p>
+      <div id="gate-passkey" class="hidden">
+        <button id="gate-passkey-btn" class="primary" type="button">🔑 Unlock with fingerprint / passkey</button>
+        <p id="gate-passkey-error" class="error"></p>
+      </div>
       <form id="gate-form">
         <label for="gate-pw">Master password</label>
         <input id="gate-pw" type="password" required>
@@ -84,6 +88,15 @@
         <label for="s-autoLockMinutes">Lock automatically after this many minutes without use (0 = when the browser closes)</label>
         <input id="s-autoLockMinutes" type="number" min="0" max="1440" class="short">
         <p id="settings-saved" class="success"></p>
+
+        <h2 class="spaced">Fingerprint / passkey unlock</h2>
+        <p class="muted">Unlock with Windows Hello, Touch ID, your phone or a security key instead of typing the master password. Your master password keeps working as a backup. The authenticator must support the WebAuthn <em>PRF</em> extension: Google Password Manager and iCloud Keychain passkeys, recent Windows Hello and most FIDO2 security keys do.</p>
+        <ul id="passkey-list" class="plain"></ul>
+        <div class="row">
+          <input id="passkey-label" class="grow" placeholder="Name, e.g. Work laptop fingerprint" maxlength="80">
+          <button id="passkey-add" type="button">Add passkey</button>
+        </div>
+        <p id="passkey-msg" class="error"></p>
 
         <h2 class="spaced">Change master password</h2>
         <form id="change-form">

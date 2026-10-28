@@ -3,7 +3,7 @@
   "name": "PwMgr \u2014 Offline Password Manager",
   "short_name": "PwMgr",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv1EUlzhSuGHxIpAzU1aKtiIRtL1bPEKOEZrnoqcHwkREzTogbHsu3Pg9+N1sH2FV3eV4SV+OpVOGMvDUmvqvils+PCCuyyZS1XkF1g7yr+cIRPawFHMzBjcHhdNrV8Vm6JJ5NMoAZMF9SyiHewt2xcp0cd6ImlkO7v7TEPwVTcf1BGEDONha14Z6SAFhUFnjaWQC7ZNg47JQBC6ndYZxTW99amcjytLx4dwFNwRhliWHIwVciQcov1vquELNdMahOk2vg1tHQ1klr9rMxV629CKNu1BIfYTVtTSTQ/GZr8RoqBwT9omAEZHGFvwfMTV2oBdSa//13fQgfBLXk9nhHwIDAQAB",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Offline, encrypted password manager with automatic autofill, per-field autofill blocking and Chrome/Edge import.",
   "minimum_chrome_version": "116",
   "permissions": [

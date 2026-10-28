@@ -111,7 +111,75 @@ async function changePassword(current, next) {
     vault: { version: 1, kdf: { name: 'PBKDF2-SHA256', salt: C.toB64(salt), iterations: C.KDF_ITERATIONS }, ...sealed },
   });
   await startSession(k, data.entries);
+  // Passkeys wrap the old key, so they can't unlock the re-encrypted vault.
+  const removed = (await getPasskeys()).length;
+  await chrome.storage.local.remove('passkeys');
+  return { passkeysRemoved: removed };
 }
+
+// ---------- passkey / fingerprint unlock (WebAuthn PRF) ----------
+// The extension page runs the WebAuthn ceremony and hands us the PRF output. That secret
+// wraps the vault key, so only the same authenticator (fingerprint, Windows Hello, Touch ID,
+// security key...) can unwrap it again. The master password keeps working as a fallback.
+
+async function getPasskeys() {
+  return (await getLocal('passkeys')) || [];
+}
+
+async function enrollPasskey({ credentialId, salt, prf, label }) {
+  await requireUnlocked();
+  if (!credentialId || !salt || !prf) throw new Error('Incomplete passkey data.');
+  const wrap = await C.deriveWrapKey(C.fromB64(prf));
+  const sealed = await C.encryptJSON(wrap, { key: await C.exportKey(key) });
+  const list = (await getPasskeys()).filter((p) => p.id !== credentialId);
+  list.push({ id: credentialId, salt, label: String(label || 'Passkey').slice(0, 80), created: Date.now(), ...sealed });
+  await chrome.storage.local.set({ passkeys: list });
+}
+
+async function unlockWithPasskey({ credentialId, prf }) {
+  const pk = (await getPasskeys()).find((p) => p.id === credentialId);
+  if (!pk) throw new Error('That passkey is not set up for PwMgr.');
+  let raw;
+  try {
+    raw = (await C.decryptJSON(await C.deriveWrapKey(C.fromB64(prf)), pk)).key;
+  } catch {
+    throw new Error('That passkey could not unlock the vault.');
+  }
+  const k = await C.importKey(raw);
+  let data;
+  try {
+    data = await C.decryptJSON(k, await getLocal('vault'));
+  } catch {
+    throw new Error('This passkey is out of date. Unlock with your master password and set it up again.');
+  }
+  await startSession(k, data.entries);
+}
+
+let unlockWindowId = null;
+
+async function openUnlockWindow() {
+  if (unlockWindowId !== null) {
+    try {
+      await chrome.windows.update(unlockWindowId, { focused: true });
+      return {};
+    } catch {
+      unlockWindowId = null;
+    }
+  }
+  const win = await chrome.windows.create({
+    url: chrome.runtime.getURL('unlock/unlock.html'),
+    type: 'popup',
+    width: 400,
+    height: 480,
+    focused: true,
+  });
+  unlockWindowId = win.id;
+  return {};
+}
+
+chrome.windows.onRemoved.addListener((id) => {
+  if (id === unlockWindowId) unlockWindowId = null;
+});
 
 async function lock() {
   key = null;
@@ -271,6 +339,8 @@ const contentHandlers = {
     return { blocked: at < 0 };
   },
 
+  openUnlockWindow: () => openUnlockWindow(),
+
   async toggleSiteBlocked(_, sender) {
     const host = hostOf(sender.url);
     if (!host) throw new Error('Cannot block this page.');
@@ -287,7 +357,11 @@ const contentHandlers = {
 
 const pageHandlers = {
   async status() {
-    return { hasVault: !!(await getLocal('vault')), locked: !(await ensureUnlocked()) };
+    return {
+      hasVault: !!(await getLocal('vault')),
+      locked: !(await ensureUnlocked()),
+      passkeys: (await getPasskeys()).length,
+    };
   },
   createVault: ({ password }) => createVault(password),
   unlock: ({ password }) => unlock(password),
@@ -296,8 +370,19 @@ const pageHandlers = {
 
   async deleteVault() {
     await lock();
-    await chrome.storage.local.remove('vault');
+    await chrome.storage.local.remove(['vault', 'passkeys']);
   },
+
+  async listPasskeys() {
+    return { passkeys: (await getPasskeys()).map(({ id, salt, label, created }) => ({ id, salt, label, created })) };
+  },
+  enrollPasskey: (msg) => enrollPasskey(msg),
+  unlockWithPasskey: (msg) => unlockWithPasskey(msg),
+  async removePasskey({ id }) {
+    await chrome.storage.local.set({ passkeys: (await getPasskeys()).filter((p) => p.id !== id) });
+    return {};
+  },
+  openUnlockWindow: () => openUnlockWindow(),
 
   async listEntries() {
     await requireUnlocked();

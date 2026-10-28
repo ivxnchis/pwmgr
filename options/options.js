@@ -1,5 +1,6 @@
 import { call, copy, el, generatePassword } from '../ui/api.js';
 import { parseBrowserExport, toCSV } from '../src/csv.js';
+import { addPasskey, passkeysSupported, unlockWithPasskey } from '../ui/passkey.js';
 
 const $ = (id) => document.getElementById(id);
 let entries = [];
@@ -7,8 +8,9 @@ let gateMode = 'unlock';
 
 // ---------- gate (create / unlock) ----------
 
-function showGate(mode) {
+function showGate(mode, passkeys = 0) {
   gateMode = mode;
+  $('gate-passkey').classList.toggle('hidden', mode !== 'unlock' || !passkeys || !passkeysSupported());
   $('gate').classList.remove('hidden');
   $('app').classList.add('hidden');
   $('lock').classList.add('hidden');
@@ -43,9 +45,19 @@ $('gate-form').addEventListener('submit', async (ev) => {
   }
 });
 
+$('gate-passkey-btn').addEventListener('click', async () => {
+  $('gate-passkey-error').textContent = '';
+  try {
+    await unlockWithPasskey();
+    await start();
+  } catch (err) {
+    $('gate-passkey-error').textContent = err.message;
+  }
+});
+
 $('lock').addEventListener('click', async () => {
   await call('lock');
-  showGate('unlock');
+  await start();
 });
 
 // ---------- tabs ----------
@@ -263,16 +275,62 @@ for (const k of SETTING_IDS) {
   });
 }
 
+async function renderPasskeys() {
+  const { passkeys } = await call('listPasskeys');
+  $('passkey-list').replaceChildren(
+    ...(passkeys.length
+      ? passkeys.map((p) =>
+          el(
+            'li',
+            {},
+            el('span', { class: 'ellipsis grow', textContent: `${p.label} — added ${new Date(p.created).toLocaleDateString()}` }),
+            el('button', {
+              class: 'small danger',
+              textContent: 'Remove',
+              onclick: async () => {
+                if (!confirm(`Stop using "${p.label}" to unlock PwMgr?`)) return;
+                await call('removePasskey', { id: p.id });
+                renderPasskeys();
+              },
+            })
+          )
+        )
+      : [el('li', { class: 'muted', textContent: 'None set up.' })])
+  );
+}
+
+$('passkey-add').addEventListener('click', async () => {
+  const msg = $('passkey-msg');
+  msg.className = 'error';
+  msg.textContent = '';
+  if (!passkeysSupported()) return (msg.textContent = 'This browser does not support passkeys.');
+  $('passkey-add').disabled = true;
+  try {
+    await addPasskey($('passkey-label').value.trim() || 'Passkey');
+    $('passkey-label').value = '';
+    msg.className = 'success';
+    msg.textContent = 'Passkey added. You can now unlock with it.';
+    renderPasskeys();
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally {
+    $('passkey-add').disabled = false;
+  }
+});
+
 $('change-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const msg = $('cp-msg');
   msg.className = 'error';
   if ($('cp-next').value !== $('cp-next2').value) return (msg.textContent = 'New passwords do not match.');
   try {
-    await call('changePassword', { current: $('cp-current').value, next: $('cp-next').value });
+    const r = await call('changePassword', { current: $('cp-current').value, next: $('cp-next').value });
     ev.target.reset();
     msg.className = 'success';
-    msg.textContent = 'Master password changed.';
+    msg.textContent = r.passkeysRemoved
+      ? 'Master password changed. Your passkeys were removed — add them again below.'
+      : 'Master password changed.';
+    renderPasskeys();
   } catch (err) {
     msg.textContent = err.message;
   }
@@ -288,13 +346,13 @@ $('delete-vault').addEventListener('click', async () => {
 // ---------- startup ----------
 
 async function start() {
-  const { hasVault, locked } = await call('status');
+  const { hasVault, locked, passkeys } = await call('status');
   if (!hasVault) return showGate('create');
-  if (locked) return showGate('unlock');
+  if (locked) return showGate('unlock', passkeys);
   $('gate').classList.add('hidden');
   $('app').classList.remove('hidden');
   $('lock').classList.remove('hidden');
-  await Promise.all([loadEntries(), loadSettings()]);
+  await Promise.all([loadEntries(), loadSettings(), renderPasskeys()]);
 
   const add = new URLSearchParams(location.hash.slice(1)).get('add');
   if (add) {

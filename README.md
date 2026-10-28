@@ -9,6 +9,7 @@ A Chrome/Edge (Manifest V3) extension that keeps your passwords **only on your c
 - **No overwriting your data.** Autofill on page load only fills empty fields, and by default only on small sign-in forms. Edit forms with many fields (a player's details, for example) are skipped. The dropdown still works there if you want it.
 - **Import from Chrome or Edge.** Supports the CSV that *Export passwords* creates (Firefox CSVs work too). Logins for the same site and username are updated rather than duplicated.
 - **Export** to a Chrome-compatible CSV for backups.
+- **Fingerprint / passkey unlock.** Under *Manage → Settings → Fingerprint / passkey unlock*, add Windows Hello, Touch ID, a phone passkey or a FIDO2 security key, then unlock with it instead of typing the master password. You can unlock from the toolbar popup, from the manage page, or from the **🔒 Unlock PwMgr** item that appears when you click a login field while the vault is locked. The master password always keeps working as a backup.
 - **Offers to save** new or changed passwords after you sign in (Save / Never for this site / Not now).
 - Popup: unlock, logins for the current site (Fill / copy), and search across all logins. The manage page lets you add, edit, delete, reveal and generate passwords.
 
@@ -50,6 +51,7 @@ Then go to PwMgr → *Manage* → *Import / Export*, choose the CSV and click **
 - The vault is encrypted with AES-256-GCM. The key is derived from your master password with PBKDF2-SHA256 (600,000 iterations) and saved in `chrome.storage.local`.
 - After you unlock, the key is held in `chrome.storage.session`. That storage is memory only, cleared when the browser closes, and not readable by web pages or content scripts. An optional auto-lock timer is under *Settings*.
 - Pages never get the vault itself. A content script asks the background worker for one credential at a time, and the worker checks it against the URL Chrome reports for that frame. A credential saved for `https://` is never filled on `http://`, and a parent domain's login is never offered to a different domain.
+- Passkey unlock uses the WebAuthn **PRF** extension. The authenticator derives a secret that only it can reproduce, after your fingerprint/PIN check, and that secret encrypts a copy of the vault key. Nothing that could unlock the vault without the authenticator is stored. Authenticators without PRF support are refused rather than falling back to something weaker. Changing the master password removes the passkeys; add them again afterwards.
 - No network permissions are used and nothing is uploaded anywhere.
 - Your master password **cannot be recovered**. Keep an exported backup somewhere safe if you need one.
 
@@ -70,6 +72,8 @@ The unit tests cover CSV import/export, URL matching, import merging and encrypt
 Layout: `src/background.js` (vault and message handling), `src/content.js` (form detection, autofill, dropdown, blocking, save prompt), `src/crypto.js`, `src/csv.js`, `src/match.js`, `src/vault.js`, `popup/`, `options/`, `ui/`.
 
 ## Known limitations
+
+- Passkey unlock needs an authenticator with PRF support: Google Password Manager or iCloud Keychain passkeys, a recent Windows 11 Windows Hello, or most FIDO2 security keys. Older Windows Hello versions may refuse; the setup screen tells you if so.
 
 - Fields inside shadow DOM (some web components) are not detected yet.
 - Logins inside cross-origin iframes are matched to the iframe's site, not the top page.

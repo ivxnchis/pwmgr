@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Unlock PwMgr</title>
+  <link rel="stylesheet" href="../ui/common.css">
+  <style>
+    body { padding: 20px; }
+    header { margin-bottom: 16px; }
+    #pk-btn { width: 100%; padding: 12px; font-size: 15px; }
+    .or { text-align: center; margin: 16px 0 4px; }
+    #done { text-align: center; font-size: 16px; margin-top: 40px; }
+  </style>
+</head>
+<body>
+  <header class="row">
+    <img src="../icons/icon32.png" width="24" height="24" alt="">
+    <h1 class="grow">Unlock PwMgr</h1>
+  </header>
+  <main id="main">
+    <div id="pk" class="hidden">
+      <button id="pk-btn" class="primary">🔑 Use fingerprint / passkey</button>
+      <p id="pk-error" class="error"></p>
+      <p class="or muted">or use your master password</p>
+    </div>
+    <form id="pw-form">
+      <label for="pw">Master password</label>
+      <input id="pw" type="password" autocomplete="current-password" required>
+      <p id="pw-error" class="error"></p>
+      <button type="submit" id="pw-btn">Unlock</button>
+    </form>
+  </main>
+  <p id="done" class="success hidden">✔ Unlocked. You can close this window.</p>
+  <script type="module" src="unlock.js"></script>
+</body>
+</html>

@@ -4,4 +4,6 @@ h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin: 
 #list { list-style: none; padding: 0; margin: 0 0 10px; max-height: 320px; overflow-y: auto; }
 #list li { padding: 8px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; }
 #list .actions { display: flex; gap: 4px; margin-top: 6px; }
+.wide { width: 100%; padding: 10px; }
+.center { text-align: center; margin: 8px 0 0; }
 .copied { color: var(--ok); font-size: 12px; }
