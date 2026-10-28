@@ -1,5 +1,6 @@
 node_modules/
 *.zip
+!dist/pwmgr.zip
 *.csv
 .DS_Store
 *.pem
