@@ -12,6 +12,7 @@ A Chrome/Edge (Manifest V3) extension that keeps your passwords **only on your c
 - **2FA codes (TOTP, same as Google Authenticator).** You can link an authenticator key to any saved login in three ways:
   - **Type the key.** Edit the login and enter the setup key the site shows, or an `otpauth://` link.
   - **QR image.** In the same field, choose a picture of the QR code or paste a screenshot with Ctrl+V.
+  - **Add 2FA key button.** On *Manage → Passwords*, click **Add 2FA key** (or **Add 2FA** on a login), paste the key or a link such as `otpauth://totp?secret=…&algorithm=SHA1&digits=6&period=30`, and pick the saved login to link it to.
   - **Scan the page.** While the site's 2FA setup page shows the QR code, open the popup and click **Add 2FA**. It reads the QR code straight from the page.
 
   To move existing accounts out of Google Authenticator, use *Manage → Import / Export → Import 2FA codes*. Take screenshots of the app's *Transfer accounts → Export* QR codes and choose them there; each account is matched to a saved login for you to confirm. Codes then fill automatically into verification-code fields (single field or six separate digit boxes), show in the field dropdown, and appear with a countdown and **Copy code** button in the popup and the manage page.

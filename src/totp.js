@@ -67,28 +67,33 @@ export async function totpCode(totp, now = Date.now()) {
 }
 
 // otpauth://totp/Issuer:account?secret=...&issuer=...&algorithm=...&digits=...&period=...
+// The label (otpauth://totp/Issuer:account?...) is optional: otpauth://totp?secret=... works too.
 export function parseOtpauth(uri) {
-  const u = new URL(uri);
+  const u = new URL(String(uri).replace(/\s+/g, ''));
   if (u.protocol !== 'otpauth:') throw new Error('Not an otpauth:// link.');
   const type = (u.host || u.pathname.replace(/^\/\//, '').split('/')[0]).toLowerCase();
   if (type !== 'totp') throw new Error('Only time-based (TOTP) codes are supported.');
   const label = decodeURIComponent(u.pathname.replace(/^\/*(totp\/)?/i, ''));
   const [labelIssuer, labelAccount] = label.includes(':') ? label.split(/:(.*)/s) : ['', label];
+  const params = new Map([...u.searchParams].map(([k, v]) => [k.toLowerCase(), v.trim()]));
+  if (!params.get('secret')) throw new Error('That link has no secret=… value.');
+  // parseInt tolerates text pasted right after the number (e.g. "period=30and").
+  const int = (name, fallback) => parseInt(params.get(name), 10) || fallback;
   return normalizeTotp({
-    secret: u.searchParams.get('secret'),
-    issuer: u.searchParams.get('issuer') || labelIssuer.trim(),
+    secret: params.get('secret'),
+    issuer: params.get('issuer') || labelIssuer.trim(),
     account: (labelAccount || '').trim(),
-    algorithm: u.searchParams.get('algorithm') || 'SHA1',
-    digits: u.searchParams.get('digits') || 6,
-    period: u.searchParams.get('period') || 30,
+    algorithm: (params.get('algorithm') || 'SHA1').match(/^sha-?(1|256|512)/i)?.[0] || params.get('algorithm'),
+    digits: int('digits', 6),
+    period: int('period', 30),
   });
 }
 
 export function toOtpauth(t) {
-  const label = encodeURIComponent(t.issuer ? `${t.issuer}:${t.account}` : t.account || 'account');
+  const label = t.issuer || t.account ? `/${encodeURIComponent(t.issuer ? `${t.issuer}:${t.account}` : t.account)}` : '';
   const q = new URLSearchParams({ secret: t.secret, algorithm: t.algorithm, digits: t.digits, period: t.period });
   if (t.issuer) q.set('issuer', t.issuer);
-  return `otpauth://totp/${label}?${q}`;
+  return `otpauth://totp${label}?${q}`;
 }
 
 // ---------- Google Authenticator export (otpauth-migration://offline?data=<protobuf>) ----------

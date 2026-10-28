@@ -28,6 +28,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .4); }
 .totp { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
 .totp .code { font: 600 16px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .04em; }
 .totp .left { color: var(--muted); font-size: 12px; }
+#t-entry { margin-top: 6px; }
+#t-entry option { padding: 4px 6px; }
 #ga-list select { width: auto; max-width: 55%; }
 @media (max-width: 560px) {
   .entry { grid-template-columns: 1fr; }

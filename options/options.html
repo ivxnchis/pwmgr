@@ -47,6 +47,7 @@
       <section id="tab-passwords" class="card">
         <div class="row">
           <input id="filter" class="grow" type="search" placeholder="Search by site or username…">
+          <button id="add-totp" title="Link a 2FA key (otpauth:// link, key or QR code) to a saved login">Add 2FA key</button>
           <button id="add" class="primary">Add</button>
         </div>
         <p id="count" class="muted"></p>
@@ -158,6 +159,27 @@
       <div class="row end">
         <button type="button" id="e-cancel">Cancel</button>
         <button type="submit" class="primary" value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="totp-dialog">
+    <form id="totp-form" method="dialog">
+      <h2>Add a 2FA key to a saved login</h2>
+      <label for="t-input">2FA key, otpauth:// link or QR code</label>
+      <div class="row">
+        <input id="t-input" class="grow" autocomplete="off" spellcheck="false" placeholder="otpauth://totp?secret=… or JBSW Y3DP …">
+        <button type="button" id="t-scan" class="small">QR image…</button>
+      </div>
+      <input type="file" id="t-file" accept="image/*" hidden>
+      <p id="t-status" class="muted small-text">Paste the link or key, choose a picture of the QR code, or paste a screenshot (Ctrl+V).</p>
+      <label for="t-search">Link it to</label>
+      <input id="t-search" type="search" placeholder="Filter saved logins…">
+      <select id="t-entry" size="7"></select>
+      <p id="t-error" class="error"></p>
+      <div class="row end">
+        <button type="button" id="t-cancel">Cancel</button>
+        <button type="submit" class="primary">Link</button>
       </div>
     </form>
   </dialog>

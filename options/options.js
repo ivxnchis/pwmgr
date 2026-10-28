@@ -135,6 +135,7 @@ function renderEntries() {
           }),
           el('button', { class: 'small', textContent: 'Copy', onclick: () => copy(e.password) }),
           el('button', { class: 'small', textContent: 'Edit', onclick: () => openEditor(e) }),
+          e.totp ? null : el('button', { class: 'small', textContent: 'Add 2FA', onclick: () => openTotpDialog(e.id) }),
           el('button', {
             class: 'small danger',
             textContent: 'Delete',
@@ -266,6 +267,109 @@ $('editor-form').addEventListener('submit', async (ev) => {
   }
 });
 
+// ---------- "Add 2FA key" dialog ----------
+
+let dialogTotp = null;
+
+function tStatus(text, isError = false) {
+  $('t-status').textContent = text;
+  $('t-status').className = `${isError ? 'error' : 'muted'} small-text`;
+}
+
+function fillEntryChoices(selectedId) {
+  const q = $('t-search').value.trim().toLowerCase();
+  const keep = selectedId ?? $('t-entry').value;
+  const shown = entries
+    .filter((e) => !q || `${e.name} ${e.url} ${e.username}`.toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.username.localeCompare(b.username));
+  $('t-entry').replaceChildren(
+    ...shown.map((e) =>
+      el('option', { value: e.id, textContent: `${e.name} — ${e.username || '(no username)'}${e.totp ? '  (already has 2FA)' : ''}` })
+    )
+  );
+  if (shown.some((e) => e.id === keep)) $('t-entry').value = keep;
+}
+
+async function tPreview() {
+  if (!dialogTotp) return;
+  const { code, remaining } = await totpCode(dialogTotp);
+  const who = [dialogTotp.issuer, dialogTotp.account].filter(Boolean).join(' · ');
+  tStatus(`✔ Valid key. Current code: ${prettyCode(code)} (changes in ${remaining}s)${who ? ` — ${who}` : ''}`);
+}
+
+function tApply(text) {
+  dialogTotp = null;
+  if (!text.trim()) return tStatus('Paste the link or key, choose a picture of the QR code, or paste a screenshot (Ctrl+V).');
+  try {
+    const { accounts } = parseTotpInput(text);
+    if (!accounts.length) throw new Error('No time-based 2FA accounts found in that code.');
+    if (accounts.length > 1) throw new Error('That QR code holds several accounts — use Import / Export → Import 2FA codes instead.');
+    dialogTotp = accounts[0];
+    // Pre-select the login the key seems to belong to, unless one was chosen already.
+    const guess = !$('t-entry').value && suggestEntry(dialogTotp);
+    if (guess) {
+      $('t-search').value = '';
+      fillEntryChoices(guess.id);
+    }
+    tPreview();
+  } catch (err) {
+    tStatus(err.message, true);
+  }
+}
+
+async function tFromImage(blob) {
+  tStatus('Reading QR code…');
+  const text = await decodeQr(blob).catch(() => null);
+  if (!text) return tStatus('No QR code found in that image. Try a sharper or closer picture.', true);
+  $('t-input').value = text;
+  tApply(text);
+}
+
+function openTotpDialog(entryId = '') {
+  dialogTotp = null;
+  $('t-input').value = '';
+  $('t-search').value = '';
+  $('t-error').textContent = '';
+  $('t-file').value = '';
+  fillEntryChoices(entryId);
+  if (!entryId) $('t-entry').value = '';
+  tApply('');
+  $('totp-dialog').showModal();
+  $('t-input').focus();
+}
+
+setInterval(() => $('totp-dialog').open && dialogTotp && tPreview(), 1000);
+$('add-totp').addEventListener('click', () => openTotpDialog());
+$('t-cancel').addEventListener('click', () => $('totp-dialog').close());
+$('t-input').addEventListener('input', () => tApply($('t-input').value));
+$('t-search').addEventListener('input', () => fillEntryChoices());
+$('t-entry').addEventListener('change', () => ($('t-error').textContent = ''));
+$('t-scan').addEventListener('click', () => $('t-file').click());
+$('t-file').addEventListener('change', (ev) => ev.target.files[0] && tFromImage(ev.target.files[0]));
+$('totp-dialog').addEventListener('paste', (ev) => {
+  const image = imageFromClipboard(ev);
+  if (image) {
+    ev.preventDefault();
+    tFromImage(image);
+  }
+});
+
+$('totp-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  $('t-error').textContent = '';
+  const target = entries.find((e) => e.id === $('t-entry').value);
+  if (!dialogTotp) return ($('t-error').textContent = 'Enter a valid 2FA key or otpauth:// link first.');
+  if (!target) return ($('t-error').textContent = 'Choose the saved login to link it to.');
+  if (target.totp && !confirm(`${target.name} — ${target.username} already has a 2FA key. Replace it?`)) return;
+  try {
+    await call('setTotp', { id: target.id, totp: dialogTotp });
+    $('totp-dialog').close();
+    await loadEntries();
+  } catch (err) {
+    $('t-error').textContent = err.message;
+  }
+});
+
 // ---------- import / export ----------
 
 let pendingRows = null;
@@ -376,7 +480,7 @@ $('ga-files').addEventListener('change', async (ev) => {
 });
 
 document.addEventListener('paste', (ev) => {
-  if ($('editor').open || $('tab-import').classList.contains('hidden')) return;
+  if ($('editor').open || $('totp-dialog').open || $('tab-import').classList.contains('hidden')) return;
   const image = imageFromClipboard(ev);
   if (image) addGaImages([image]);
 });

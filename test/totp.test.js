@@ -63,3 +63,19 @@ test('CSV keeps TOTP secrets', () => {
   const rows = [{ name: 'n', url: 'https://a.com', username: 'u', password: 'p', note: '', totp }];
   assert.deepEqual(parseBrowserExport(toCSV(rows)).entries, rows);
 });
+
+test('accepts otpauth links without a label and with sloppy formatting', async () => {
+  const expected = { secret: 'FXLRRJMTJ5R6H257', algorithm: 'SHA1', digits: 6, period: 30, issuer: '', account: '' };
+  for (const s of [
+    'otpauth://totp?secret=FXLRRJMTJ5R6H257&algorithm=SHA1&digits=6&period=30',
+    'otpauth://totp?secret=FXLRRJMTJ5R6H257&algorithm=SHA1&digits=6&period=30and',
+    '  otpauth://totp/?secret=FXLR RJMT J5R6 H257\n',
+    'OTPAUTH://TOTP?SECRET=FXLRRJMTJ5R6H257&ALGORITHM=sha1',
+  ]) {
+    assert.deepEqual(parseTotpInput(s).accounts[0], expected, s);
+  }
+  assert.deepEqual(parseOtpauth(toOtpauth(expected)), expected);
+  assert.equal(toOtpauth(expected).startsWith('otpauth://totp?'), true);
+  assert.throws(() => parseTotpInput('otpauth://totp?digits=6'), /no secret/);
+  assert.equal((await totpCode(expected, 0)).code.length, 6);
+});
