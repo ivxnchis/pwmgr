@@ -12,11 +12,24 @@ A Chrome/Edge (Manifest V3) extension that keeps your passwords **only on your c
 - **Offers to save** new or changed passwords after you sign in (Save / Never for this site / Not now).
 - Popup: unlock, logins for the current site (Fill / copy), and search across all logins. The manage page lets you add, edit, delete, reveal and generate passwords.
 
-## Install (unpacked)
+## Install
 
-1. Download or clone this repository.
+Ready-made packages are in [`dist/`](dist/): `pwmgr.zip` and `pwmgr.crx`. The extension ID is always `llacdoihjbcfebjdojdkpfmgpglnadkf`, so updating keeps your saved passwords.
+
+**Recommended (works everywhere): ZIP + Load unpacked**
+
+1. Download `dist/pwmgr.zip` and unzip it somewhere permanent, for example `Documents/pwmgr`. Don't delete that folder later: the browser loads the extension from it.
 2. Open `chrome://extensions` (or `edge://extensions`) and turn on **Developer mode**.
-3. Click **Load unpacked** and choose this folder (the one that contains `manifest.json`).
+3. Click **Load unpacked** and choose the unzipped `pwmgr` folder.
+
+To update, unzip the new version over the same folder and click the reload ↻ icon on the extension's card.
+
+**CRX file**
+
+Drag `dist/pwmgr.crx` onto the `chrome://extensions` / `edge://extensions` page with Developer mode on. Chrome on **Windows and macOS refuses** `.crx` files that don't come from the Chrome Web Store (you'll see an error such as *CRX_REQUIRED_PROOF_MISSING*, or the extension gets disabled). It works on Linux and in browsers managed by enterprise policy. If it's refused, use the ZIP instead.
+
+**Then:**
+
 4. Click the PwMgr toolbar icon and create a master password.
 5. **Turn off the browser's own password manager** so the two don't both fill fields:
    - Chrome: `chrome://password-manager/settings` → turn off *Offer to save passwords* and *Sign in automatically*.
@@ -44,6 +57,12 @@ Then go to PwMgr → *Manage* → *Import / Export*, choose the CSV and click **
 
 ```bash
 npm test
+```
+
+To rebuild the packages, run the command below. Signing the `.crx` needs the private key `pwmgr-key.pem`, which is kept out of git. Without it, only the ZIP is built.
+
+```bash
+scripts/build.sh path/to/pwmgr-key.pem
 ```
 
 The unit tests cover CSV import/export, URL matching, import merging and encryption. No build step or dependencies are needed.

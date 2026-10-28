@@ -2,3 +2,5 @@ node_modules/
 *.zip
 *.csv
 .DS_Store
+*.pem
+dist/*.tmp
